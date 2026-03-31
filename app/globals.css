@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/* ── Pastel / Cream UI Tokens ── */
+:root {
+  --aria-bg: #fcfbf6;
+  --aria-surface: #ffffff;
+  --aria-card: #f8f6f0;
+  --aria-border: rgba(0, 0, 0, 0.05);
+  
+  --aria-text: #171720;
+  --aria-text-muted: #64748b;
+  
+  --aria-pastel-blue: #9fd1fc;
+  --aria-pastel-purple: #bcaaed;
+  
+  --auth-gradient: linear-gradient(160deg, #add8f6 0%, #e6d8fa 100%);
+}
+
+/* ── Base ── */
+* { box-sizing: border-box; }
+
+html, body {
+  background-color: var(--aria-bg);
+  color: var(--aria-text);
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
+
+/* ── Typography Soft Styles ── */
+.text-heading {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #171720;
+}
+
+/* ── Glassmorphism (Light Mode Sidebar) ── */
+.glass-drawer {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-left: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: -10px 0 40px rgba(0,0,0,0.05);
+}
+
+.auth-glass-card {
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ── Search Bar Soft Glow ── */
+.glow-input-container {
+  background: #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 4px 15px -3px rgba(188, 170, 237, 0.3), inset 0 1px 2px rgba(255,255,255,0.8);
+  border: 1px solid rgba(188, 170, 237, 0.1);
+}
+
+.glow-input-container input {
+  background: transparent;
+  border: none;
+  outline: none;
+  width: 100%;
+}
+
+/* ── Chat Bubbles (Pastel Pill) ── */
+.bubble-ai {
+  background: var(--aria-pastel-purple);
+  color: #0f0f14;
+  border-radius: 12px 12px 12px 0px;
+  box-shadow: 0 2px 8px rgba(188, 170, 237, 0.2);
+}
+
+.bubble-user {
+  background: var(--aria-pastel-blue);
+  color: #0f0f14;
+  border-radius: 12px 12px 0px 12px;
+  box-shadow: 0 2px 8px rgba(159, 209, 252, 0.2);
+}
+
+/* ── Chat Input Pill ── */
+.chat-input-pill {
+  background: #f0eadd;
+  border-radius: 20px;
+  color: #1a1a24;
+}
+
+/* ── Buttons ── */
+.btn-dark {
+  background: #25283f;
+  color: #ffffff;
+  border-radius: 99px;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(37, 40, 63, 0.2);
+  transition: all 0.2s;
+}
+.btn-dark:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(37, 40, 63, 0.3);
+}
+.btn-dark:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 5px rgba(37, 40, 63, 0.2);
+}
+
+/* ── Typing Indicator Dots (Subtle Dark) ── */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.typing-dot { animation: typing-dot 1s ease-in-out infinite; background-color: #333; }
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* ── Preformatted Code Blocks ── */
+.code-block {
+  background: #fdfbf6;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+/* ── SafeArea ── */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 24px); }
+.safe-top { padding-top: env(safe-area-inset-top, 16px); }
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #ece8dd;
+  border-radius: 8px;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,0.4) 20%, rgba(255,255,255,0.6) 60%, rgba(255,255,255,0));
+  animation: shimmer 2s infinite;
+}
+.messages-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
