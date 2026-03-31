@@ -10,10 +10,11 @@ import { SidebarNavigation } from '@/components/ui/SidebarNavigation';
 import toast from 'react-hot-toast';
 
 const MODELS = [
-  { key: 'auto', label: 'Auto (Best available)', desc: 'Tries Groq → Gemini → OpenRouter' },
-  { key: 'groq', label: 'Groq — Llama 3.3 70B', desc: 'Fast and capable' },
-  { key: 'gemini', label: 'Gemini 2.0 Flash', desc: 'Google AI' },
-  { key: 'openrouter', label: 'OpenRouter — Llama 3.1 70B', desc: 'Free tier' },
+  { key: 'auto',        label: 'Auto (Best available)',         desc: 'Tries Groq → HuggingFace → OpenRouter' },
+  { key: 'groq',        label: 'Groq — Llama 3.3 70B',         desc: 'Fast and capable' },
+  { key: 'huggingface', label: 'HuggingFace — Llama 3.1 8B',   desc: 'Free · No quota limits' },
+  { key: 'openrouter',  label: 'OpenRouter — Free models',      desc: 'Community free tier' },
+  { key: 'image',       label: 'Image Gen — Pollinations AI',   desc: 'Text-to-image · Free' },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

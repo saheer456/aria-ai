@@ -92,6 +92,30 @@ export function ChatBubble({ role, content, model, timestamp }: ChatBubbleProps)
                   ),
                   th: ({ children }) => <th className="bg-slate-100 px-3 py-2 text-left font-semibold border border-slate-200">{children}</th>,
                   td: ({ children }) => <td className="px-3 py-2 border border-slate-200">{children}</td>,
+                  // Images — renders DeepAI generated images
+                  img: ({ src, alt }) => {
+                    const imgSrc = typeof src === 'string' ? src : undefined;
+                    return (
+                      <div className="my-3 flex flex-col gap-2">
+                        <img
+                          src={imgSrc}
+                          alt={alt || 'Generated image'}
+                          className="rounded-2xl max-w-full shadow-md border border-black/5 w-full"
+                          style={{ maxHeight: '480px', objectFit: 'contain' }}
+                        />
+                        {imgSrc && (
+                          <a
+                            href={imgSrc}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="self-start text-[12px] font-medium text-slate-500 hover:text-slate-800 transition-colors"
+                          >
+                            ↓ Open full image
+                          </a>
+                        )}
+                      </div>
+                    );
+                  },
                 }}
               >
                 {content}

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -17,23 +16,42 @@ async function callGroq(messages: Message[], modelId?: string): Promise<{ text: 
     max_tokens: 2048,
     temperature: 0.7,
   });
-  return { text: completion.choices[0]?.message?.content ?? '', model: 'GROQ' };
+  return { text: completion.choices[0]?.message?.content ?? '', model: 'Groq' };
 }
 
-async function callGemini(messages: Message[], modelId?: string): Promise<{ text: string; model: string }> {
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: modelId || 'gemini-2.0-flash' });
-  const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }],
-  }));
-  const lastMsg = messages[messages.length - 1].content;
-  const chat = model.startChat({ history });
-  const result = await chat.sendMessage(lastMsg);
-  return { text: result.response.text(), model: 'Gemini' };
+async function callHuggingFace(messages: Message[], modelId?: string): Promise<{ text: string; model: string }> {
+  // HuggingFace Inference API — free tier, OpenAI-compatible endpoint
+  const model = modelId || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
+
+  const response = await fetch('https://api-inference.huggingface.co/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.HF_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.7 }),
+  });
+
+  if (response.status === 401) throw new Error('HuggingFace: invalid token — check HF_TOKEN in .env.local');
+  if (response.status === 429) throw new Error('HuggingFace: rate limited, try again shortly');
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`HuggingFace error ${response.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices[0]?.message?.content ?? '';
+  if (!text) throw new Error('HuggingFace returned an empty response');
+
+  const shortModel = model.includes('/') ? model.split('/')[1] : model;
+  return { text, model: `HuggingFace (${shortModel})` };
 }
 
 async function callOpenRouter(messages: Message[], modelId?: string): Promise<{ text: string; model: string }> {
+  // 'openrouter/free' is OpenRouter's built-in meta-router — it auto-picks whichever
+  // free model is currently available, so no hardcoded slugs ever go stale.
+  const model = modelId || 'openrouter/free';
+
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -42,31 +60,39 @@ async function callOpenRouter(messages: Message[], modelId?: string): Promise<{ 
       'HTTP-Referer': 'https://aria-ai.app',
       'X-Title': 'Aria AI',
     },
-    body: JSON.stringify({
-      model: modelId || 'meta-llama/llama-3.1-70b-instruct:free',
-      messages,
-      max_tokens: 2048,
-    }),
+    body: JSON.stringify({ model, messages, max_tokens: 2048 }),
   });
-  if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
+
+  if (response.status === 401) throw new Error('OpenRouter: invalid API key — check OPENROUTER_KEY in .env.local');
+  if (response.status === 429) throw new Error('OpenRouter: rate limited, try again shortly');
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`OpenRouter error ${response.status}: ${body.slice(0, 200)}`);
+  }
+
   const data = await response.json();
-  return { text: data.choices[0]?.message?.content ?? '', model: 'OpenRouter' };
+  const text = data.choices[0]?.message?.content ?? '';
+  if (!text) throw new Error('OpenRouter returned an empty response');
+
+  const usedModel = (data.model as string | undefined) ?? model;
+  const shortName = usedModel.includes('/') ? usedModel.split('/')[1].replace(/:free$/, '') : usedModel;
+  return { text, model: `OpenRouter (${shortName})` };
 }
 
 // ── Routing ────────────────────────────────────────────────────────────────
 
-type ProviderKey = 'groq' | 'gemini' | 'openrouter' | 'auto';
+type ProviderKey = 'groq' | 'huggingface' | 'openrouter' | 'auto';
 
 async function routeToModel(messages: Message[], provider: ProviderKey) {
-  if (provider === 'groq') return callGroq(messages);
-  if (provider === 'gemini') return callGemini(messages);
-  if (provider === 'openrouter') return callOpenRouter(messages);
+  if (provider === 'groq')         return callGroq(messages);
+  if (provider === 'huggingface')  return callHuggingFace(messages);
+  if (provider === 'openrouter')   return callOpenRouter(messages);
 
   // auto — try in order with fallback
   const providers = [
-    { name: 'Groq', fn: () => callGroq(messages) },
-    { name: 'Gemini', fn: () => callGemini(messages) },
-    { name: 'OpenRouter', fn: () => callOpenRouter(messages) },
+    { name: 'Groq',         fn: () => callGroq(messages) },
+    { name: 'HuggingFace',  fn: () => callHuggingFace(messages) },
+    { name: 'OpenRouter',   fn: () => callOpenRouter(messages) },
   ];
   for (const p of providers) {
     try {

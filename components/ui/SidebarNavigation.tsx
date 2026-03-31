@@ -242,8 +242,9 @@ export function SidebarNavigation({ isOpen = false, onClose, user, displayName, 
                       ) : apiStatus.length === 0 ? (
                         [
                           { name: 'Groq', status: 'unknown' },
-                          { name: 'Google', status: 'unknown' },
+                          { name: 'HuggingFace', status: 'unknown' },
                           { name: 'OpenRouter', status: 'unknown' },
+                          { name: 'Image Gen', status: 'unknown' },
                         ].map(api => (
                           <div key={api.name} className="flex items-center gap-2 px-2 py-1.5">
                             <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />

@@ -22,10 +22,11 @@ interface ChatHistory { id: string; title: string; created_at: string; }
 
 // ── Available models ───────────────────────────────────────────────────────
 const MODELS = [
-  { key: 'auto',        label: 'Auto',           desc: 'Best available' },
-  { key: 'groq',        label: 'Groq (Llama 3)', desc: 'Fast & capable' },
-  { key: 'gemini',      label: 'Gemini Flash',   desc: 'Google AI' },
-  { key: 'openrouter',  label: 'OpenRouter',     desc: 'Llama 3.1 70B' },
+  { key: 'auto',         label: 'Auto',            desc: 'Best available',        dot: 'bg-green-400' },
+  { key: 'groq',         label: 'Groq (Llama 3)',  desc: 'Fast & capable',         dot: 'bg-blue-400' },
+  { key: 'huggingface',  label: 'HuggingFace',     desc: 'Llama 3.1 · Free',       dot: 'bg-yellow-400' },
+  { key: 'openrouter',   label: 'OpenRouter',      desc: 'Free community models',  dot: 'bg-orange-400' },
+  { key: 'image',        label: 'Image Gen',       desc: 'Pollinations AI · Free', dot: 'bg-purple-400' },
 ] as const;
 
 type ModelKey = typeof MODELS[number]['key'];
@@ -86,6 +87,7 @@ export default function ChatPage() {
     e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
   };
 
+
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || isLoading) return;
@@ -120,31 +122,54 @@ export default function ChatPage() {
     if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'user', content: text, model_used: null }).then(() => {});
 
     try {
-      const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history, chatId, provider: selectedModel }),
-      });
+      if (selectedModel === 'image') {
+        // ── Image generation via DeepAI ────────────────────────────────────
+        const res = await fetch('/api/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text }),
+        });
+        if (!res.ok) throw new Error('Image generation failed — check your DEEPAI_API_KEY');
+        const data = await res.json();
 
-      if (!res.ok) throw new Error('API error');
-      const data = await res.json();
+        const aiMsg: Message = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `![Generated Image](${data.imageUrl})\n\n*Prompt: ${text}*`,
+          model_used: 'DeepAI Image',
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => {
+          const next = [...prev, aiMsg];
+          if (!user) localStorage.setItem(`aria_chat_${chatId}`, JSON.stringify(next));
+          return next;
+        });
+        if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'assistant', content: aiMsg.content, model_used: 'DeepAI Image' }).then(() => {});
+      } else {
+        // ── Normal chat ────────────────────────────────────────────────────
+        const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history, chatId, provider: selectedModel }),
+        });
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
 
-      const aiMsg: Message = {
-        id: crypto.randomUUID(), role: 'assistant',
-        content: data.content, model_used: data.model,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => {
-        const next = [...prev, aiMsg];
-        if (!user) localStorage.setItem(`aria_chat_${chatId}`, JSON.stringify(next));
-        return next;
-      });
-
-      if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'assistant', content: data.content, model_used: data.model }).then(() => {});
-    } catch {
-      toast.error('Failed to get a response. Please check your API keys.');
+        const aiMsg: Message = {
+          id: crypto.randomUUID(), role: 'assistant',
+          content: data.content, model_used: data.model,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => {
+          const next = [...prev, aiMsg];
+          if (!user) localStorage.setItem(`aria_chat_${chatId}`, JSON.stringify(next));
+          return next;
+        });
+        if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'assistant', content: data.content, model_used: data.model }).then(() => {});
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to get a response.');
     } finally {
       setIsLoading(false);
     }
@@ -197,10 +222,13 @@ export default function ChatPage() {
             {isLoading && (
               <div className="flex items-start gap-3 mb-5">
                 <div className="w-7 h-7 rounded-full bg-[var(--aria-pastel-purple)] flex items-center justify-center text-[11px] font-bold text-slate-700 shrink-0">A</div>
-                <div className="bubble-ai px-4 py-3 flex gap-1.5">
+                <div className="bubble-ai px-4 py-3 flex items-center gap-2.5">
                   <div className="w-2 h-2 bg-slate-500/40 rounded-full typing-dot" />
                   <div className="w-2 h-2 bg-slate-500/40 rounded-full typing-dot" />
                   <div className="w-2 h-2 bg-slate-500/40 rounded-full typing-dot" />
+                  {selectedModel === 'image' && (
+                    <span className="text-[12px] text-slate-400 ml-1">Generating image…</span>
+                  )}
                 </div>
               </div>
             )}
@@ -241,7 +269,7 @@ export default function ChatPage() {
                     onClick={(e) => { e.stopPropagation(); setModelDropdownOpen(o => !o); }}
                     className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-800 font-medium px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${'dot' in activeModel ? activeModel.dot : 'bg-green-400'}`} />
                     {activeModel.label}
                     <ChevronDown size={12} className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -266,7 +294,7 @@ export default function ChatPage() {
                             }}
                             className={`w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors ${selectedModel === m.key ? 'bg-slate-50' : ''}`}
                           >
-                            <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${selectedModel === m.key ? 'bg-green-400' : 'bg-slate-200'}`} />
+                            <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${selectedModel === m.key ? m.dot : 'bg-slate-200'}`} />
                             <div>
                               <p className="text-[13px] font-medium text-slate-800">{m.label}</p>
                               <p className="text-[11px] text-slate-400">{m.desc}</p>
@@ -278,7 +306,9 @@ export default function ChatPage() {
                   </AnimatePresence>
                 </div>
 
-                <p className="text-[11px] text-slate-400">Enter ↵ to send · Shift+Enter for new line</p>
+                <p className="text-[11px] text-slate-400">
+                  {selectedModel === 'image' ? '🎨 Describe an image to generate' : 'Enter ↵ to send · Shift+Enter for new line'}
+                </p>
               </div>
             </div>
           </div>
