@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, MessageSquare, BarChart2, Settings, Plug, HelpCircle,
-  LogOut, ChevronDown, ChevronLeft, ChevronRight, Plus, X, User, Check, Loader2,
+  LogOut, ChevronDown, ChevronLeft, ChevronRight, Plus, X, User, Check, Loader2, Brain,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
@@ -208,6 +208,9 @@ export function SidebarNavigation({ isOpen = false, onClose, user, displayName, 
 
           {/* Analytics */}
           <NavRow icon={BarChart2} label="Analytics" path="/analytics" />
+
+          {/* Memory */}
+          <NavRow icon={Brain} label="Memory" path="/memory" badge="RAG" />
 
           {/* Settings */}
           <NavRow icon={Settings} label="Settings" path="/settings" />

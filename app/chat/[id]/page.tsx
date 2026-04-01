@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Send, Menu, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatBubble } from '@/components/ui/ChatBubble';
+import { RatingButtons } from '@/components/ui/RatingButtons';
 import { SidebarNavigation } from '@/components/ui/SidebarNavigation';
 import { useAuth } from '@/context/AuthContext';
 import { createClient } from '@/utils/supabase/client';
@@ -16,6 +17,7 @@ interface Message {
   content: string;
   model_used?: string;
   created_at: string;
+  ragMemoryIds?: string[]; // IDs of RAG memories used to generate this response
 }
 
 interface ChatHistory { id: string; title: string; created_at: string; }
@@ -119,17 +121,16 @@ export default function ChatPage() {
       }
     }
 
-    if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'user', content: text, model_used: null }).then(() => {});
+    if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'user', content: text }).then(() => {});
 
     try {
       if (selectedModel === 'image') {
-        // ── Image generation via DeepAI ────────────────────────────────────
         const res = await fetch('/api/image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: text }),
         });
-        if (!res.ok) throw new Error('Image generation failed — check your DEEPAI_API_KEY');
+        if (!res.ok) throw new Error('Image generation failed');
         const data = await res.json();
 
         const aiMsg: Message = {
@@ -146,31 +147,70 @@ export default function ChatPage() {
         });
         if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'assistant', content: aiMsg.content, model_used: 'DeepAI Image' }).then(() => {});
       } else {
-        // ── Normal chat ────────────────────────────────────────────────────
+        // ── Streaming Chat ──────────────────────────────────────────────────
         const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, chatId, provider: selectedModel }),
+          body: JSON.stringify({ messages: history, chatId, provider: selectedModel, sessionId: 'global' }),
         });
-        if (!res.ok) throw new Error('API error');
-        const data = await res.json();
 
+        if (!res.ok) throw new Error('API error');
+        if (!res.body) throw new Error('No response body');
+
+        // Extract metadata from headers
+        const modelUsed = res.headers.get('x-aria-model') || 'AI Assistant';
+        const ragIds = res.headers.get('x-aria-rag')?.split(',').filter(Boolean) || [];
+
+        // Add empty assistant message to state
+        const aiMsgId = crypto.randomUUID();
         const aiMsg: Message = {
-          id: crypto.randomUUID(), role: 'assistant',
-          content: data.content, model_used: data.model,
+          id: aiMsgId,
+          role: 'assistant',
+          content: '',
+          model_used: modelUsed,
           created_at: new Date().toISOString(),
+          ragMemoryIds: ragIds
         };
-        setMessages((prev) => {
-          const next = [...prev, aiMsg];
-          if (!user) localStorage.setItem(`aria_chat_${chatId}`, JSON.stringify(next));
-          return next;
-        });
-        if (user) supabase.from('messages').insert({ chat_id: chatId, role: 'assistant', content: data.content, model_used: data.model }).then(() => {});
+
+        setMessages(prev => [...prev, aiMsg]);
+        setIsLoading(false); // Stop general loading, now we stream text
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          fullContent += chunk;
+
+          // Update message content in real-time
+          setMessages(prev => prev.map(m => 
+            m.id === aiMsgId ? { ...m, content: fullContent } : m
+          ));
+        }
+
+        // Final persistence
+        if (!user) {
+          setMessages(prev => {
+            localStorage.setItem(`aria_chat_${chatId}`, JSON.stringify(prev));
+            return prev;
+          });
+        }
+        if (user) {
+          supabase.from('messages').insert({ 
+            chat_id: chatId, 
+            role: 'assistant', 
+            content: fullContent, 
+            model_used: modelUsed 
+          }).then(() => {});
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to get a response.');
-    } finally {
       setIsLoading(false);
     }
   }, [input, isLoading, messages, user, chatId, supabase, selectedModel]);
@@ -216,7 +256,17 @@ export default function ChatPage() {
             </AnimatePresence>
 
             {messages.map((msg) => (
-              <ChatBubble key={msg.id} role={msg.role} content={msg.content} model={msg.model_used} timestamp={msg.created_at} />
+              <div key={msg.id}>
+                <ChatBubble role={msg.role} content={msg.content} model={msg.model_used} timestamp={msg.created_at} />
+                {msg.role === 'assistant' && (
+                  <div className="ml-10 -mt-1 mb-3">
+                    <RatingButtons
+                      messageId={msg.id}
+                      memoryIds={msg.ragMemoryIds}
+                    />
+                  </div>
+                )}
+              </div>
             ))}
 
             {isLoading && (

@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CodeBlock } from './CodeBlock';
 
 interface ChatBubbleProps {
   role: 'user' | 'assistant';
@@ -49,18 +50,22 @@ export function ChatBubble({ role, content, model, timestamp }: ChatBubbleProps)
                   ul: ({ children }) => <ul className="list-disc list-outside ml-4 mb-2 space-y-1">{children}</ul>,
                   ol: ({ children }) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-1">{children}</ol>,
                   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                  // Inline code
+                  // Inline code and block code
                   code: ({ children, className }) => {
-                    const isBlock = className?.includes('language-');
-                    if (isBlock) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const isInline = !match;
+                    
+                    if (!isInline) {
                       return (
-                        <code className="block bg-slate-900 text-slate-100 rounded-xl px-4 py-3 text-[13px] font-mono leading-relaxed overflow-x-auto whitespace-pre my-2">
-                          {children}
-                        </code>
+                        <CodeBlock 
+                          language={match[1]} 
+                          value={String(children).replace(/\n$/, '')} 
+                        />
                       );
                     }
+                    
                     return (
-                      <code className="bg-black/8 text-slate-800 rounded-md px-1.5 py-0.5 text-[13px] font-mono">
+                      <code className="bg-black/5 text-slate-800 rounded-md px-1.5 py-0.5 text-[13px] font-mono font-medium">
                         {children}
                       </code>
                     );
@@ -69,7 +74,7 @@ export function ChatBubble({ role, content, model, timestamp }: ChatBubbleProps)
                   pre: ({ children }) => <pre className="my-2 overflow-x-auto">{children}</pre>,
                   // Blockquote
                   blockquote: ({ children }) => (
-                    <blockquote className="border-l-3 border-slate-300 pl-3 my-2 italic text-slate-600">
+                    <blockquote className="border-l-4 border-slate-200 pl-4 py-1 my-4 italic text-slate-500 bg-slate-50/50 rounded-r-lg">
                       {children}
                     </blockquote>
                   ),
@@ -86,12 +91,14 @@ export function ChatBubble({ role, content, model, timestamp }: ChatBubbleProps)
                   hr: () => <hr className="my-3 border-slate-200" />,
                   // Table
                   table: ({ children }) => (
-                    <div className="overflow-x-auto my-2">
-                      <table className="min-w-full text-[13px] border-collapse border border-slate-200 rounded-lg">{children}</table>
+                    <div className="overflow-hidden my-4 border border-slate-200 rounded-xl shadow-sm">
+                      <table className="min-w-full text-[13.5px] border-collapse">{children}</table>
                     </div>
                   ),
-                  th: ({ children }) => <th className="bg-slate-100 px-3 py-2 text-left font-semibold border border-slate-200">{children}</th>,
-                  td: ({ children }) => <td className="px-3 py-2 border border-slate-200">{children}</td>,
+                  thead: ({ children }) => <thead className="bg-slate-50 border-b border-slate-200 font-semibold">{children}</thead>,
+                  th: ({ children }) => <th className="px-4 py-3 text-left font-bold text-slate-700 border-r border-slate-200 last:border-0">{children}</th>,
+                  td: ({ children }) => <td className="px-4 py-3 border-b border-r border-slate-100 last:border-r-0 last:border-b-0 hover:bg-slate-50/50 transition-colors">{children}</td>,
+                  tr: ({ children }) => <tr className="last:border-0">{children}</tr>,
                   // Images — renders DeepAI generated images
                   img: ({ src, alt }) => {
                     const imgSrc = typeof src === 'string' ? src : undefined;
