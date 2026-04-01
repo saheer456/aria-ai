@@ -45,12 +45,12 @@ create index if not exists rag_memories_embedding_idx
   on public.rag_memories
   using hnsw (embedding vector_cosine_ops);
 
--- 5. Similarity search function
---    Returns top-K memories for a given query embedding, filtered by session and min_score.
+-- 5. Similarity search function (STRICT per-user — no global fallback)
+--    Returns top-K memories for a given query embedding, filtered STRICTLY by session.
 create or replace function match_memories(
   query_embedding vector(384),
   match_count     int     default 5,
-  session         text    default 'global',
+  session         text    default 'guest_anonymous',
   min_score       float4  default -1.0
 )
 returns table (
@@ -73,7 +73,7 @@ language sql stable as $$
     1 - (m.embedding <=> query_embedding) as similarity
   from public.rag_memories m
   where
-    (m.session_id = session or m.session_id = 'global')
+    m.session_id = session          -- STRICT: only this user's memories
     and m.score >= min_score
     and m.embedding is not null
   order by m.embedding <=> query_embedding

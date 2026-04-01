@@ -153,3 +153,68 @@ html, body {
   animation: shimmer 2s infinite;
 }
 .messages-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+
+/* ── Print Styles (PDF Export) ── */
+@media print {
+  /* Hide all UI chrome */
+  aside, 
+  nav, 
+  button,
+  .chat-input-pill,
+  .glow-input-container,
+  .safe-bottom,
+  .lg\:hidden,
+  [role="button"] {
+    display: none !important;
+  }
+
+  /* Reset layout for page flow */
+  html, body {
+    background: white !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .min-h-screen, .h-screen {
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  .flex-1 {
+    display: block !important;
+  }
+
+  .messages-container {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 20px 0 !important;
+  }
+
+  /* Make bubbles print-friendly */
+  .bubble-ai, .bubble-user {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #ffffff !important;
+    color: black !important;
+    margin-bottom: 1.5rem !important;
+    page-break-inside: avoid;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .bubble-ai {
+    background-color: #f8fafc !important;
+  }
+
+  /* Ensure text is black/readable */
+  p, span, h1, h2, h3, h4, li {
+    color: #000000 !important;
+  }
+
+  /* Keep code blocks clean */
+  pre, code {
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    page-break-inside: avoid;
+  }
+}

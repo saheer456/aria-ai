@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Send, Menu, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Send, Menu, ChevronDown, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatBubble } from '@/components/ui/ChatBubble';
 import { RatingButtons } from '@/components/ui/RatingButtons';
@@ -50,6 +50,17 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const supabase = createClient();
+
+  // ── Per-user RAG session ID ─────────────────────────────────────────────
+  // Logged-in: use stable Supabase user UUID.
+  // Guest: generate once, persist in localStorage as a stable anonymous ID.
+  const sessionId = user?.id ?? (() => {
+    try {
+      let gid = localStorage.getItem('aria_guest_id');
+      if (!gid) { gid = crypto.randomUUID(); localStorage.setItem('aria_guest_id', gid); }
+      return `guest_${gid}`;
+    } catch { return 'guest_anonymous'; }
+  })();
 
   // Load messages
   useEffect(() => {
@@ -152,7 +163,7 @@ export default function ChatPage() {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, chatId, provider: selectedModel, sessionId: 'global' }),
+          body: JSON.stringify({ messages: history, chatId, provider: selectedModel, sessionId }),
         });
 
         if (!res.ok) throw new Error('API error');
@@ -221,6 +232,10 @@ export default function ChatPage() {
 
   const handleSignOut = async () => { await signOut(); toast.success('Signed out'); };
 
+  const handleExportPdf = () => {
+    window.print();
+  };
+
   const activeModel = MODELS.find(m => m.key === selectedModel) || MODELS[0];
 
   return (
@@ -235,6 +250,15 @@ export default function ChatPage() {
             <ArrowLeft size={20} strokeWidth={1.5} />
           </button>
           <span className="flex-1 font-semibold text-slate-800 text-[15px] truncate">{chatTitle}</span>
+          
+          <button 
+            onClick={handleExportPdf}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all"
+            title="Export chat to PDF"
+          >
+            <FileText size={14} strokeWidth={2} />
+            <span className="hidden sm:inline">Export PDF</span>
+          </button>
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 hover:text-slate-800 rounded-xl transition-colors">
             <Menu size={20} strokeWidth={1.5} />
           </button>

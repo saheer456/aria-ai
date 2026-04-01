@@ -185,7 +185,7 @@ export default function HelpPage() {
           </div>
 
           {/* Version */}
-          <p className="text-center text-[11px] text-slate-400 pb-4">Aria AI Assistant · v1.0.0 · Built with ❤️</p>
+          <p className="text-center text-[11px] text-slate-400 pb-4">Aria AI Assistant · v1.5.0 'Aura' · Built with ❤️</p>
         </div>
       </div>
     </div>

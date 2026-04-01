@@ -6,6 +6,7 @@ import {
   Brain, Trash2, RefreshCw, Code2, MessageSquare, Palette, Lightbulb,
   Search, ChevronDown, ThumbsUp, ThumbsDown, Sparkles, Database
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface Memory {
   id: string;
@@ -196,17 +197,26 @@ function MemoryCard({ memory, onDelete, onRate }: {
 }
 
 export default function MemoryPage() {
+  const { user } = useAuth();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [stats, setStats] = useState({ total: 0, avgScore: 0, topType: '' });
 
+  // ── Same session ID logic as chat page ──
+  const sessionId = user?.id ?? (() => {
+    try {
+      let gid = localStorage.getItem('aria_guest_id');
+      if (!gid) { gid = crypto.randomUUID(); localStorage.setItem('aria_guest_id', gid); }
+      return `guest_${gid}`;
+    } catch { return 'guest_anonymous'; }
+  })();
+
   const fetchMemories = useCallback(async () => {
     setLoading(true);
     try {
-      // Use server-side API route to avoid browser Supabase timeout issues
-      const res = await fetch('/api/rag/memories');
+      const res = await fetch(`/api/rag/memories?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { memories: mems } = await res.json() as { memories: Memory[] };
       setMemories(mems || []);
@@ -227,7 +237,7 @@ export default function MemoryPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => { fetchMemories(); }, [fetchMemories]);
 

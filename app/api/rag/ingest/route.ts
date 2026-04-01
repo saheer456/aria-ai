@@ -1,15 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseFetch } from '../supabase-fetch';
-
-// ── Supabase REST (no JS client — avoids connection issues) ───────────────
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const sbHeaders = {
-  apikey: SB_KEY,
-  Authorization: `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-  Prefer: 'return=representation',
-};
+import { getRagSupabase } from '../supabase-client';
 
 // ── HuggingFace embedding (all-MiniLM-L6-v2 → 384-dim, free tier) ─────────
 async function getEmbedding(text: string): Promise<number[]> {
@@ -31,8 +21,6 @@ async function getEmbedding(text: string): Promise<number[]> {
   }
 
   const data = await response.json();
-
-  // HF returns either [[...embedding]] or [...embedding]
   if (Array.isArray(data[0])) return data[0] as number[];
   return data as number[];
 }
@@ -84,75 +72,65 @@ Skip if: greetings, vague chat, simple confirmations, already generic knowledge.
   }
 }
 
-// ── Handler ────────────────────────────────────────────────────────────────
+// ── Direct Invocation Logic (bypasses Next.js localhost networking) ─────────
+export async function processIngestion(userMessage: string, aiResponse: string, sessionId: string) {
+  const effectiveSessionId = sessionId || 'guest_anonymous';
+  const supabase = getRagSupabase();
+
+  if (!userMessage || !aiResponse) return null;
+
+  // Step 1: Detect + extract
+  const extracted = await detectAndExtract(userMessage, aiResponse);
+  if (!extracted || !extracted.shouldStore || !extracted.chunk) return null;
+
+  // Step 2 & 3: Embed and Store
+  let embedding: number[] | undefined;
+  try {
+    embedding = await getEmbedding(extracted.chunk);
+  } catch (err) {
+    console.error('[RAG Ingest] Embedding logic failed:', err);
+    // Continue without embedding (store text only)
+  }
+
+  const record = {
+    session_id: effectiveSessionId,
+    chunk_type: extracted.type || 'qa',
+    content: extracted.chunk,
+    source_user: userMessage.slice(0, 500),
+    source_ai: aiResponse.slice(0, 500),
+    tags: extracted.tags || [],
+    score: 0,
+    ...(embedding ? { embedding: `[${embedding.join(',')}]` } : {})
+  };
+
+  const { data, error } = await supabase.from('rag_memories').insert(record).select('id').single();
+
+  if (error) {
+    console.error(`[RAG Ingest] Supabase insert failed: ${error.message}`);
+    throw error;
+  }
+
+  console.log(`[RAG] Stored memory ${data?.id} (session: ${effectiveSessionId}) — tags: ${extracted.tags?.join(', ')}`);
+  return { id: data?.id, embedded: !!embedding, chunk: extracted.chunk };
+}
+
+// ── Route Handler (Optional generic HTTP access if needed) ────────────────
 export async function POST(req: Request) {
   try {
-    const { userMessage, aiResponse, sessionId = 'global', chatId } = await req.json();
-
+    const { userMessage, aiResponse, sessionId } = await req.json();
+    
     if (!userMessage || !aiResponse) {
-      return NextResponse.json({ error: 'userMessage and aiResponse are required' }, { status: 400 });
+      return NextResponse.json({ error: 'userMessage and aiResponse required' }, { status: 400 });
     }
 
-    // Step 1: Detect + extract
-    const extracted = await detectAndExtract(userMessage, aiResponse);
-
-    if (!extracted || !extracted.shouldStore || !extracted.chunk) {
-      return NextResponse.json({ stored: false, reason: extracted?.reason || 'Not worth storing' });
+    const result = await processIngestion(userMessage, aiResponse, sessionId);
+    
+    if (!result) {
+      return NextResponse.json({ stored: false, reason: 'Not worth storing' });
     }
 
-    // Step 2: Embed the extracted chunk
-    let embedding: number[];
-    try {
-      embedding = await getEmbedding(extracted.chunk);
-    } catch (err) {
-      console.error('[RAG Ingest] Embedding failed:', err);
-      // Store without embedding — can be re-embedded later
-      const res = await supabaseFetch(`${SB_URL}/rest/v1/rag_memories`, {
-        method: 'POST',
-        headers: sbHeaders,
-        body: JSON.stringify({
-          session_id: sessionId,
-          chunk_type: extracted.type || 'qa',
-          content: extracted.chunk,
-          source_user: userMessage.slice(0, 500),
-          source_ai: aiResponse.slice(0, 500),
-          tags: extracted.tags || [],
-          score: 0,
-        }),
-      });
-      if (!res.ok) { const b = await res.text(); throw new Error(`Supabase insert ${res.status}: ${b.slice(0,200)}`); }
-      const rows = await res.json() as any[];
-      return NextResponse.json({ stored: true, id: rows[0]?.id, embedded: false });
-    }
-
-    // Step 3: Store in Supabase with embedding via REST
-    const insertRes = await supabaseFetch(`${SB_URL}/rest/v1/rag_memories`, {
-      method: 'POST',
-      headers: sbHeaders,
-      body: JSON.stringify({
-        session_id: sessionId,
-        chunk_type: extracted.type || 'qa',
-        content: extracted.chunk,
-        source_user: userMessage.slice(0, 500),
-        source_ai: aiResponse.slice(0, 500),
-        embedding: `[${embedding.join(',')}]`,
-        tags: extracted.tags || [],
-        score: 0,
-      }),
-    });
-
-    if (!insertRes.ok) {
-      const b = await insertRes.text();
-      throw new Error(`Supabase insert ${insertRes.status}: ${b.slice(0, 200)}`);
-    }
-    const rows = await insertRes.json() as any[];
-    const id = rows[0]?.id;
-
-    console.log(`[RAG] Stored memory ${id} — type: ${extracted.type}, tags: ${extracted.tags?.join(', ')}`);
-
-    return NextResponse.json({ stored: true, id, type: extracted.type, tags: extracted.tags, chunk: extracted.chunk });
+    return NextResponse.json({ stored: true, ...result });
   } catch (err) {
-    console.error('[RAG Ingest] Error:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 });
   }
 }
